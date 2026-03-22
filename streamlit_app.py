@@ -1,128 +1,48 @@
 import streamlit as st
-import requests
-import time
-import speech_recognition as sr
+from app import detect_emotion, build_prompt, get_response
 
-# -------------------------------
-# 🎯 Therapist Prompt
-# -------------------------------
-SYSTEM_PROMPT = """
-You are a highly skilled, empathetic AI therapist.
+st.set_page_config(page_title="AI Therapist", page_icon="🧠")
 
-- Be warm, calm, and supportive
-- Validate emotions
-- Ask thoughtful questions
-- Avoid robotic replies
-"""
+st.title("🧠 AI Therapist")
+st.caption("I'm here to listen and support you 💙")
 
-# -------------------------------
-# 🧠 Emotion Detection
-# -------------------------------
-def detect_emotion(text):
-    text = text.lower()
-
-    if "sad" in text:
-        return "sad"
-    elif "happy" in text:
-        return "happy"
-    elif "angry" in text:
-        return "angry"
-    elif "anxious" in text:
-        return "anxious"
-    else:
-        return "neutral"
-
-# -------------------------------
-# 🎤 Voice Input
-# -------------------------------
-def listen_voice():
-    r = sr.Recognizer()
-
-    with sr.Microphone() as source:
-        st.info("🎤 Listening...")
-        audio = r.listen(source)
-
-    try:
-        return r.recognize_google(audio)
-    except:
-        return ""
-
-# -------------------------------
-# 🤖 Faster Response
-# -------------------------------
-def get_response(prompt):
-    try:
-        res = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": "llama3:8b",
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.7,
-                    "num_predict": 120
-                }
-            }
-        )
-        return res.json().get("response", "")
-    except:
-        return "⚠️ Ollama not running"
-
-# -------------------------------
-# Prompt Builder
-# -------------------------------
-def build_prompt(user_input, emotion):
-    return f"""
-{SYSTEM_PROMPT}
-
-User emotion: {emotion}
-
-User: {user_input}
-AI:
-"""
-
-# -------------------------------
-# UI
-# -------------------------------
-st.title("🧠 AI Therapist Pro")
-st.write("I'm here to support you 💙")
-
+# Session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat
+# Display old messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Voice button
-if st.button("🎤 Speak"):
-    user_input = listen_voice()
-else:
-    user_input = st.chat_input("How are you feeling?")
+# User input
+user_input = st.chat_input("How are you feeling today?")
 
 if user_input:
+    # Detect emotion
     emotion = detect_emotion(user_input)
-    st.caption(f"Emotion: {emotion}")
+    st.caption(f"Detected emotion: {emotion}")
 
+    # Save user message
     st.session_state.messages.append({"role": "user", "content": user_input})
 
+    # Show user message
     with st.chat_message("user"):
         st.markdown(user_input)
 
+    # AI response
     with st.chat_message("assistant"):
-        placeholder = st.empty()
-        full = ""
+        message_placeholder = st.empty()
 
         with st.spinner("Thinking..."):
-            prompt = build_prompt(user_input, emotion)
-            reply = get_response(prompt)
+            prompt = build_prompt(st.session_state.messages)
+            ai_reply = get_response(prompt)
 
-        for word in reply.split():
-            full += word + " "
-            time.sleep(0.02)
-            placeholder.markdown(full + "▌")
+        # Typing effect
+        full_response = ""
+        for word in ai_reply.split():
+            full_response += word + " "
+            message_placeholder.markdown(full_response)
 
-        placeholder.markdown(full)
-
-    st.session_state.messages.append({"role": "assistant", "content": full})
+        # Save AI response
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
